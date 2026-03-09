@@ -10,7 +10,7 @@ import requests
 import streamlit as st
 
 # 👉 Replace with your TMDb API Key
-TMDB_API_KEY = "e378b171f90b63371c1d4524cc5bf441"
+TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
 
 # 🌍 Countries to check
 countries = {
@@ -68,6 +68,7 @@ def get_all_providers(media_type: str):
     data = res.json()
     return sorted(set(p["provider_name"] for p in data.get("results", [])))
 
+
 def search_titles(query: str, media_type: str):
     url = f"https://api.themoviedb.org/3/search/{media_type}"
     params = {"api_key": TMDB_API_KEY, "query": query}
@@ -75,8 +76,33 @@ def search_titles(query: str, media_type: str):
     res.raise_for_status()
     return res.json().get("results", [])
 
+
 def get_watch_providers(title_id: int, media_type: str):
     url = f"https://api.themoviedb.org/3/{media_type}/{title_id}/watch/providers"
+    params = {"api_key": TMDB_API_KEY}
+    res = requests.get(url, params=params, timeout=20)
+    res.raise_for_status()
+    return res.json().get("results", {})
+
+
+def get_tv_details(tv_id: int):
+    url = f"https://api.themoviedb.org/3/tv/{tv_id}"
+    params = {"api_key": TMDB_API_KEY}
+    res = requests.get(url, params=params, timeout=20)
+    res.raise_for_status()
+    return res.json()
+
+
+def get_season_details(tv_id: int, season_number: int):
+    url = f"https://api.themoviedb.org/3/tv/{tv_id}/season/{season_number}"
+    params = {"api_key": TMDB_API_KEY}
+    res = requests.get(url, params=params, timeout=20)
+    res.raise_for_status()
+    return res.json()
+
+
+def get_season_watch_providers(tv_id: int, season_number: int):
+    url = f"https://api.themoviedb.org/3/tv/{tv_id}/season/{season_number}/watch/providers"
     params = {"api_key": TMDB_API_KEY}
     res = requests.get(url, params=params, timeout=20)
     res.raise_for_status()
@@ -137,6 +163,7 @@ def inject_flag_styles():
     </style>
     """)
 
+
 def render_country_flags(country_codes):
     parts = ['<div class="flag-row">']
     for code in country_codes:
@@ -152,6 +179,27 @@ def render_country_flags(country_codes):
         )
     parts.append("</div>")
     st.html("".join(parts))
+
+
+def build_platform_map(providers_data, selected_platforms):
+    platform_map = {}
+
+    for country_code in countries.keys():
+        country_info = providers_data.get(country_code, {})
+        flatrate = country_info.get("flatrate", [])
+
+        for provider in flatrate:
+            provider_name = provider["provider_name"]
+
+            if selected_platforms and provider_name not in selected_platforms:
+                continue
+
+            if provider_name not in platform_map:
+                platform_map[provider_name] = []
+
+            platform_map[provider_name].append(country_code)
+
+    return platform_map
 
 # ---------- App ----------
 
@@ -212,24 +260,78 @@ if query:
             default=[],
         )
 
-        providers_data = get_watch_providers(title_id, media_type)
+        providers_data = {}
+        scope_label = ""
 
-        platform_map = {}
+        # ---------- Movie logic ----------
+        if media_type == "movie":
+            providers_data = get_watch_providers(title_id, media_type)
+            scope_label = "Movie availability"
 
-        for country_code in countries.keys():
-            country_info = providers_data.get(country_code, {})
-            flatrate = country_info.get("flatrate", [])
+        # ---------- TV logic ----------
+        else:
+            tv_details = get_tv_details(title_id)
+            seasons = tv_details.get("seasons", [])
 
-            for provider in flatrate:
-                provider_name = provider["provider_name"]
+            availability_scope = st.radio(
+                "Availability scope:",
+                ["Whole show", "Specific season"],
+                horizontal=True
+            )
 
-                if selected_platforms and provider_name not in selected_platforms:
-                    continue
+            if availability_scope == "Whole show":
+                providers_data = get_watch_providers(title_id, "tv")
+                scope_label = "TV show availability"
 
-                if provider_name not in platform_map:
-                    platform_map[provider_name] = []
+            else:
+                valid_seasons = [
+                    s for s in seasons
+                    if s.get("season_number", 0) > 0
+                ]
 
-                platform_map[provider_name].append(country_code)
+                if valid_seasons:
+                    season_options = [
+                        f"Season {s['season_number']}" for s in valid_seasons
+                    ]
+
+                    selected_season_label = st.selectbox(
+                        "Select a season:",
+                        options=season_options
+                    )
+
+                    selected_season_number = int(selected_season_label.replace("Season ", ""))
+
+                    # Episode selector for info only
+                    season_details = get_season_details(title_id, selected_season_number)
+                    episodes = season_details.get("episodes", [])
+
+                    if episodes:
+                        episode_options = [
+                            f"Episode {ep.get('episode_number')} - {ep.get('name', 'Unknown episode')}"
+                            for ep in episodes
+                        ]
+
+                        st.selectbox(
+                            "Select an episode (info only):",
+                            options=episode_options
+                        )
+
+                        st.caption(
+                            "Episode-level streaming availability is not provided by TMDb. "
+                            "Results below are shown at the season level."
+                        )
+
+                    providers_data = get_season_watch_providers(title_id, selected_season_number)
+                    scope_label = f"Season {selected_season_number} availability"
+                else:
+                    st.info("No selectable seasons found for this TV show.")
+                    providers_data = {}
+                    scope_label = "TV show availability"
+
+        if scope_label:
+            st.caption(scope_label)
+
+        platform_map = build_platform_map(providers_data, selected_platforms)
 
         if platform_map:
             st.markdown("### 📡 Streaming Platforms")
