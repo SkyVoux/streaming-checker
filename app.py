@@ -14,96 +14,236 @@ TMDB_API_KEY = "e378b171f90b63371c1d4524cc5bf441"
 
 # 🌍 Countries to check
 countries = {
-    'US': '🇺🇸', 'FR': '🇫🇷', 'BR': '🇧🇷', 'DE': '🇩🇪', 'GB': '🇬🇧', 'CA': '🇨🇦', 'AU': '🇦🇺',
-    'JP': '🇯🇵', 'IN': '🇮🇳', 'IT': '🇮🇹', 'ES': '🇪🇸', 'NL': '🇳🇱', 'MX': '🇲🇽', 'AR': '🇦🇷',
-    'BE': '🇧🇪', 'CH': '🇨🇭', 'SE': '🇸🇪', 'DK': '🇩🇰', 'FI': '🇫🇮', 'NO': '🇳🇴', 'IE': '🇮🇪',
-    'NZ': '🇳🇿', 'KR': '🇰🇷', 'ZA': '🇿🇦', 'PL': '🇵🇱', 'PT': '🇵🇹', 'CL': '🇨🇱', 'CO': '🇨🇴',
-    'TR': '🇹🇷', 'GR': '🇬🇷', 'AT': '🇦🇹', 'CZ': '🇨🇿', 'HU': '🇭🇺', 'SG': '🇸🇬', 'HK': '🇭🇰',
-    'MY': '🇲🇾', 'TH': '🇹🇭', 'PH': '🇵🇭', 'ID': '🇮🇩', 'AE': '🇦🇪', 'SA': '🇸🇦', 'IL': '🇮🇱'
+    "US": {"flag": "🇺🇸", "name": "United States"},
+    "FR": {"flag": "🇫🇷", "name": "France"},
+    "BR": {"flag": "🇧🇷", "name": "Brazil"},
+    "DE": {"flag": "🇩🇪", "name": "Germany"},
+    "GB": {"flag": "🇬🇧", "name": "United Kingdom"},
+    "CA": {"flag": "🇨🇦", "name": "Canada"},
+    "AU": {"flag": "🇦🇺", "name": "Australia"},
+    "JP": {"flag": "🇯🇵", "name": "Japan"},
+    "IN": {"flag": "🇮🇳", "name": "India"},
+    "IT": {"flag": "🇮🇹", "name": "Italy"},
+    "ES": {"flag": "🇪🇸", "name": "Spain"},
+    "NL": {"flag": "🇳🇱", "name": "Netherlands"},
+    "MX": {"flag": "🇲🇽", "name": "Mexico"},
+    "AR": {"flag": "🇦🇷", "name": "Argentina"},
+    "BE": {"flag": "🇧🇪", "name": "Belgium"},
+    "CH": {"flag": "🇨🇭", "name": "Switzerland"},
+    "SE": {"flag": "🇸🇪", "name": "Sweden"},
+    "DK": {"flag": "🇩🇰", "name": "Denmark"},
+    "FI": {"flag": "🇫🇮", "name": "Finland"},
+    "NO": {"flag": "🇳🇴", "name": "Norway"},
+    "IE": {"flag": "🇮🇪", "name": "Ireland"},
+    "NZ": {"flag": "🇳🇿", "name": "New Zealand"},
+    "KR": {"flag": "🇰🇷", "name": "South Korea"},
+    "ZA": {"flag": "🇿🇦", "name": "South Africa"},
+    "PL": {"flag": "🇵🇱", "name": "Poland"},
+    "PT": {"flag": "🇵🇹", "name": "Portugal"},
+    "CL": {"flag": "🇨🇱", "name": "Chile"},
+    "CO": {"flag": "🇨🇴", "name": "Colombia"},
+    "TR": {"flag": "🇹🇷", "name": "Turkey"},
+    "GR": {"flag": "🇬🇷", "name": "Greece"},
+    "AT": {"flag": "🇦🇹", "name": "Austria"},
+    "CZ": {"flag": "🇨🇿", "name": "Czech Republic"},
+    "HU": {"flag": "🇭🇺", "name": "Hungary"},
+    "SG": {"flag": "🇸🇬", "name": "Singapore"},
+    "HK": {"flag": "🇭🇰", "name": "Hong Kong"},
+    "MY": {"flag": "🇲🇾", "name": "Malaysia"},
+    "TH": {"flag": "🇹🇭", "name": "Thailand"},
+    "PH": {"flag": "🇵🇭", "name": "Philippines"},
+    "ID": {"flag": "🇮🇩", "name": "Indonesia"},
+    "AE": {"flag": "🇦🇪", "name": "United Arab Emirates"},
+    "SA": {"flag": "🇸🇦", "name": "Saudi Arabia"},
+    "IL": {"flag": "🇮🇱", "name": "Israel"},
 }
 
-# 📺 Get all streaming platforms for the dropdown
+# ---------- API helpers ----------
+
 @st.cache_data
-def get_all_providers():
-    url = f"https://api.themoviedb.org/3/watch/providers/movie?api_key={TMDB_API_KEY}&language=en-US"
-    res = requests.get(url)
+def get_all_providers(media_type: str):
+    url = f"https://api.themoviedb.org/3/watch/providers/{media_type}?api_key={TMDB_API_KEY}&language=en-US"
+    res = requests.get(url, timeout=20)
     res.raise_for_status()
     data = res.json()
-    return sorted(set(p['provider_name'] for p in data['results']))
+    return sorted(set(p["provider_name"] for p in data.get("results", [])))
 
-# 🌍 Search and select a movie
-def search_movies(query):
-    url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={query}"
-    res = requests.get(url)
+def search_titles(query: str, media_type: str):
+    url = f"https://api.themoviedb.org/3/search/{media_type}"
+    params = {"api_key": TMDB_API_KEY, "query": query}
+    res = requests.get(url, params=params, timeout=20)
+    res.raise_for_status()
     return res.json().get("results", [])
 
-# 🎬 Get streaming providers for a movie
-def get_watch_providers(movie_id):
-    url = f"https://api.themoviedb.org/3/movie/{movie_id}/watch/providers?api_key={TMDB_API_KEY}"
-    res = requests.get(url)
+def get_watch_providers(title_id: int, media_type: str):
+    url = f"https://api.themoviedb.org/3/{media_type}/{title_id}/watch/providers"
+    params = {"api_key": TMDB_API_KEY}
+    res = requests.get(url, params=params, timeout=20)
+    res.raise_for_status()
     return res.json().get("results", {})
 
-# UI start
-st.set_page_config(page_title="Streaming Availability", layout="centered")
-st.title("🌍 Stream Check")
+# ---------- UI helpers ----------
 
-# Step 1: Search query
-query = st.text_input("Enter a movie title:")
+def inject_flag_styles():
+    st.html("""
+    <style>
+    .flag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 6px;
+        margin-bottom: 6px;
+    }
+
+    .flag-chip {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+        line-height: 1;
+        cursor: default;
+        user-select: none;
+        padding: 2px 4px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.04);
+    }
+
+    .flag-chip .tooltiptext {
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity 0.15s ease;
+        position: absolute;
+        bottom: 135%;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        background: rgba(25,25,25,0.95);
+        color: white;
+        text-align: center;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 0.80rem;
+        z-index: 9999;
+        pointer-events: none;
+    }
+
+    .flag-chip:hover .tooltiptext,
+    .flag-chip:active .tooltiptext,
+    .flag-chip:focus .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+    }
+    </style>
+    """)
+
+def render_country_flags(country_codes):
+    parts = ['<div class="flag-row">']
+    for code in country_codes:
+        flag = countries[code]["flag"]
+        name = countries[code]["name"]
+        parts.append(
+            f"""
+            <span class="flag-chip" tabindex="0" aria-label="{name}">
+                {flag}
+                <span class="tooltiptext">{name}</span>
+            </span>
+            """
+        )
+    parts.append("</div>")
+    st.html("".join(parts))
+
+# ---------- App ----------
+
+st.set_page_config(page_title="Streaming Availability", layout="centered")
+inject_flag_styles()
+
+st.title("🌍 Streaming Check")
+
+media_choice = st.segmented_control(
+    "Choose type:",
+    options=["Movie", "TV Show"],
+    default="Movie",
+)
+
+media_type = "movie" if media_choice == "Movie" else "tv"
+
+query = st.text_input(f"Enter a {media_choice.lower()} title:")
 
 if query:
-    results = search_movies(query)
+    results = search_titles(query, media_type)
 
     if not results:
         st.warning("No results found.")
     else:
-        # Step 2: Let user select from results
-        options = [
-            f"{m['title']} ({m.get('release_date', '')[:4]})" for m in results
-        ]
-        selected_index = st.selectbox("Select the correct movie:", options=options)
-        selected_movie = results[options.index(selected_index)]
+        def option_label(item):
+            if media_type == "movie":
+                title = item.get("title", "Unknown title")
+                year = item.get("release_date", "")[:4]
+            else:
+                title = item.get("name", "Unknown title")
+                year = item.get("first_air_date", "")[:4]
+            return f"{title} ({year})" if year else title
 
-        movie_id = selected_movie["id"]
-        title = selected_movie["title"]
-        release_year = selected_movie.get("release_date", "")[:4]
-        poster_path = selected_movie.get("poster_path")
+        options = [option_label(item) for item in results]
+        selected_option = st.selectbox("Select the correct result:", options=options)
+        selected_item = results[options.index(selected_option)]
 
-        # Show poster
+        title_id = selected_item["id"]
+
+        if media_type == "movie":
+            title = selected_item.get("title", "Unknown title")
+            year = selected_item.get("release_date", "")[:4]
+        else:
+            title = selected_item.get("name", "Unknown title")
+            year = selected_item.get("first_air_date", "")[:4]
+
+        poster_path = selected_item.get("poster_path")
         if poster_path:
             poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}"
             st.image(poster_url, width=250)
 
-        st.subheader(f"🎬 {title} ({release_year})")
+        st.subheader(f"🎬 {title} ({year})" if year else f"🎬 {title}")
 
-        # Step 3: Platform filter
-        all_platforms = get_all_providers()
+        all_platforms = get_all_providers(media_type)
         selected_platforms = st.multiselect(
-            "Filter by platform (optional):", options=all_platforms, default=[]
+            "Filter by platform (optional):",
+            options=all_platforms,
+            default=[],
         )
 
-        # Step 4: Check availability
-        platform_map = {}
-        providers_data = get_watch_providers(movie_id)
+        providers_data = get_watch_providers(title_id, media_type)
 
-        for country_code, emoji in countries.items():
+        platform_map = {}
+
+        for country_code in countries.keys():
             country_info = providers_data.get(country_code, {})
             flatrate = country_info.get("flatrate", [])
-            for p in flatrate:
-                name = p["provider_name"]
-                if selected_platforms and name not in selected_platforms:
+
+            for provider in flatrate:
+                provider_name = provider["provider_name"]
+
+                if selected_platforms and provider_name not in selected_platforms:
                     continue
-                if name not in platform_map:
-                    platform_map[name] = []
-                platform_map[name].append(emoji)
+
+                if provider_name not in platform_map:
+                    platform_map[provider_name] = []
+
+                platform_map[provider_name].append(country_code)
 
         if platform_map:
-            st.markdown("📡 **Streaming Platforms:**")
-            for platform, flags in sorted(platform_map.items()):
-                st.markdown(f"- **{platform}**: {' '.join(flags)}")
+            st.markdown("### 📡 Streaming Platforms")
+
+            for platform, country_codes in sorted(platform_map.items()):
+                st.markdown(f"**{platform}**")
+                render_country_flags(sorted(country_codes))
+
+                with st.popover(f"See country names for {platform}"):
+                    for code in sorted(country_codes):
+                        st.write(f'{countries[code]["flag"]} {countries[code]["name"]}')
         else:
-            st.info("No streaming availability found in selected countries/platforms.")
-            
-            
+            st.info("No streaming availability found in the selected countries/platforms.")
+
 st.markdown(
     """
     ---
